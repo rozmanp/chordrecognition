@@ -1,39 +1,51 @@
 package hu.bme.mit.soundtest;
 
 import android.util.Log;
-import android.widget.TextView;
-
-import com.paramsen.noise.Noise;
-import com.paramsen.noise.NoiseOptimized;
 
 import org.apache.commons.math3.complex.Complex;
 import org.apache.commons.math3.transform.DftNormalization;
 import org.apache.commons.math3.transform.FastFourierTransformer;
 import org.apache.commons.math3.transform.TransformType;
 
-import java.nio.ByteBuffer;
-import java.nio.DoubleBuffer;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
 public class ProcessingRunnable implements Runnable {
-    private float[] window = new float[Consts.SAMPLES_PER_WINDOW];
-    private ListeningActivity mainActivity;
-    private int toleranceInCents = 30;
-    private static int runCount = 0;
-    FastFourierTransformer fftObj = new FastFourierTransformer(DftNormalization.UNITARY);
+    private short[] window;
+    private MainActivity mainActivity;
 
-    public ProcessingRunnable(float[] shortWindow, ListeningActivity activity) {
-        Log.e("src", Integer.toString(shortWindow.length));
-        Log.e("dst", Integer.toString(window.length));
+    private FastFourierTransformer fftObj = new FastFourierTransformer(DftNormalization.UNITARY);
+    private double[] hammingWin;
+    private double[] XAxisVals;
+    private int windowSizeWithPadding;
 
+    //Constructor is used to compute arrays beforehand that will remain the same with every window
+    ProcessingRunnable(MainActivity activity) {
+        mainActivity = activity;
 
-        window = shortWindow;
-        //for (int i = 0; i < shortWindow.length; ++i) {
-        //    window[i] = (float) shortWindow[i];
-       // }
+        //Computing the values of the Hamming window
+        hammingWin = hamming(Consts.SAMPLES_PER_WINDOW);
 
-        this.mainActivity = activity;
+        //Determine the nearest greater power of 2 to the window size
+        //FFT only accepts input arrays with the length of a power of 2
+        //So the window needs to be padded with 0s until its length is a power of 2
+        windowSizeWithPadding = 0;
+        int iter = 0;
+        while (windowSizeWithPadding < Consts.SAMPLES_PER_WINDOW) {
+            windowSizeWithPadding = (int) Math.pow(2, iter);
+            ++iter;
+        }
+
+        //As long as the windows are of the same length,
+        //the size of the output of the FFT will remain the same
+        XAxisVals = log2space(0, Consts.NYQUIST, windowSizeWithPadding / 2);
+    }
+
+    //Window needs to be set every time a thread starts
+    void setWindow(short[] win) {
+        window = win;
     }
 
     //Linearly spaced vector between first and last (closed interval)
@@ -43,6 +55,15 @@ public class ProcessingRunnable implements Runnable {
             vec[i] = first + i * (last - first) / (total - 1);
         }
         return vec;
+    }
+
+    //Generate n-point Hamming window
+    private double[] hamming(int n){
+        double[] w = new double[n];
+        for (int i = 0; i < n; ++i) {
+            w[i] = 0.54 - 0.46*Math.cos((2 * Math.PI * i) / (n - 1));
+        }
+        return w;
     }
 
     //For transforming linear axis values to base 2 logarithmic
@@ -56,50 +77,24 @@ public class ProcessingRunnable implements Runnable {
     }
 
     public void run() {
-        //System.out.println(ByteOrder.nativeOrder());
-
-
-        //NOISE FFT
-        /*float[] fft = new float[window.length + 2];
-        NoiseOptimized noise = Noise.real().optimized().init(window.length, true); //.fft(window, fft);
-        fft = noise.fft(window);*/
-
-        //APACHE FFT
-        int windowSizeWithPadding = 0;
-        int iter = 10;                                      //Buffer size won't be lower than 2^10
-        while (windowSizeWithPadding < Consts.SAMPLES_PER_WINDOW) {
-            windowSizeWithPadding = (int) Math.pow(2, iter);
-            ++iter;
+        // Apply Hamming window
+        for(int i = 0; i < window.length; ++i){
+            window[i] *= hammingWin[i];
         }
 
+        //APACHE FFT
+        //Cast window content to doubles for the FFT
+        //Unset values will remain 0 (padding)
         double[] windowInDoubles = new double[windowSizeWithPadding];
         for(int i = 0; i < window.length; ++i) {
             windowInDoubles[i] = (double) window[i];
         }
 
-        DoubleBuffer db = DoubleBuffer.wrap(windowInDoubles);
-        ByteBuffer bb = ByteBuffer.allocate(windowInDoubles.length*8);
-        bb.asDoubleBuffer().put(db);
-
-        Complex[] fftComp = fftObj.transform(db.array(), TransformType.FORWARD);
+        Complex[] fftComp = fftObj.transform(windowInDoubles, TransformType.FORWARD);
         double[] fft = new double[fftComp.length];
         for (int i = 0; i < fft.length; ++i) {
-            fft[i] = fftComp[i].abs();
+            fft[i] = Math.pow(fftComp[i].abs(), 2);
         }
-
-        //Normalize and take absolute
-        /*for (int i = 0; i < fft.length; ++i) {
-            //if (fft[i] == Float.NEGATIVE_INFINITY || fft[i] == Float.POSITIVE_INFINITY)
-            //    fft[i] = 0;
-
-            fft[i] = Math.abs(fft[i] / window.length);
-        }*/
-
-        float NYQUIST = Consts.SAMPLE_RATE / 2;
-
-        //Create vector for axis values
-        double[] XAxisVals = log2space(0, NYQUIST, fft.length / 2);
-
 
         //Create 48 bins for 4 octaves of notes
         List<List<Double>> bins = new ArrayList<>();
@@ -109,25 +104,24 @@ public class ProcessingRunnable implements Runnable {
 
         //Select and group relevant values into bins
         for (int i = 0; i < XAxisVals.length; ++i) {
-            //Ignore all frequencies below C2
-            if (XAxisVals[i] < -toleranceInCents)
+            //Ignore all frequencies below and including C2
+            if (XAxisVals[i] < Consts.TOLERANCE_IN_CENTS)
                 continue;
 
-            //Ignore all frequencies over B5 (+tolerance)
-            if (XAxisVals[i] > 4800 - toleranceInCents)
+            //Ignore all frequencies over C6 (+tolerance)
+            if (XAxisVals[i] > 4800 + Consts.TOLERANCE_IN_CENTS)
                 break;
 
             double difference = XAxisVals[i] % 100;               //Difference from the closest lower note
-            int noteNr = (int) Math.round(XAxisVals[i] / 100);    //Closest note
+            int noteNr = (int) Math.round(XAxisVals[i] / 100) - 1;    //Closest note
 
             //If it is within the range, add to the corresponding bin
-            if (difference < toleranceInCents || difference > 100 - toleranceInCents){
-
+            if (difference < Consts.TOLERANCE_IN_CENTS || difference > 100 - Consts.TOLERANCE_IN_CENTS){
                 bins.get(noteNr).add(fft[i]);
             }
         }
 
-        //Maximum selection in each bit
+        //Maximum selection in each bin
         double[] maxVals = new double[48];
         for (int i = 0; i < bins.size(); ++i){
             double thisMax = 0;
@@ -141,21 +135,21 @@ public class ProcessingRunnable implements Runnable {
                     }
                 }
             } else {
-                Log.e("WARNING", "Empty bin: #" + i);
+                Log.w("WARNING", "Empty bin: #" + i);
             }
 
             maxVals[i] = thisMax;
         }
 
         //Creating chroma vector by summing
-        float chromaVector[] = new float[12];
+        double chromaVector[] = new double[12];
         for (int i = 0; i < maxVals.length; ++i) {
-            chromaVector[i % 12] += maxVals[i];
+            chromaVector[(i+1) % 12] += maxVals[i];
         }
 
         //Normalize chroma vector
-        float maxAggregatedVal = Float.NEGATIVE_INFINITY;
-        for (float chVal : chromaVector) {
+        double maxAggregatedVal = Float.NEGATIVE_INFINITY;
+        for (double chVal : chromaVector) {
             if (chVal > maxAggregatedVal) {
                 maxAggregatedVal = chVal;
             }
@@ -165,73 +159,58 @@ public class ProcessingRunnable implements Runnable {
         }
 
         //Pattern matching
-        float[][] deltas = new float[Chords.values().length][12];
+        ArrayList<ChordData> chordDiffs = new ArrayList<>();
         for (int i = 0; i < Chords.values().length; ++i) {
             Chords thisChord = Chords.values()[i];
 
             for (int shiftBy = 0; shiftBy < 12; ++shiftBy) {
-                Float[] invMask = Chords.getInverse(thisChord, shiftBy);
+                ChordData newChordData = new ChordData(shiftBy, thisChord);
+                Double[] invMask = Chords.getInverse(thisChord, shiftBy);
 
                 for (int bit = 0; bit < invMask.length; ++bit) {
-                    deltas[i][shiftBy] += invMask[bit] * Math.pow(chromaVector[bit], 2);
+                    newChordData.delta += invMask[bit] *  Math.pow(chromaVector[bit], 2);
                 }
-                deltas[i][shiftBy] = (float) Math.sqrt(deltas[i][shiftBy]);
+
+                newChordData.delta = Math.sqrt(newChordData.delta);
+                chordDiffs.add(newChordData);
             }
         }
 
-        //Select lowest delta value
-        ArrayList<Float> vals;
-        ArrayList<Chords> chords;
-        ArrayList<Integer> notes;
-/*
-        for (int i = 0; i < Chords.values().length; ++i){
-            for (int j = 0; j < 12; ++j){
-                Log.i("Current",Chords.getNoteName(j) +
-                        Chords.getType(Chords.values()[i], true) + ", value: " + deltas[i][j]);
-                if (deltas[i][j] < minDelta) {
-                    minDelta = deltas[i][j];
-                    chordIndex = i;
-                    deltaIndex = j;
-                }
+        //Sorting the chords by their score at pattern matching
+        Collections.sort(chordDiffs, new Comparator<ChordData>() {
+            @Override
+            public int compare(ChordData o1, ChordData o2) {
+                return o1.delta.compareTo(o2.delta);
             }
-        }
-*/
-
-        //Select lowest delta value
-        float minDelta = Float.MAX_VALUE;
-        int chordIndex = -1, deltaIndex = -1;
-        for (int i = 0; i < Chords.values().length; ++i){
-            for (int j = 0; j < 12; ++j){
-                if (deltas[i][j] < minDelta) {
-                    minDelta = deltas[i][j];
-                    chordIndex = i;
-                    deltaIndex = j;
-                }
-            }
-        }
+        });
 
         mainActivity.runOnUiThread(new Runnable() {
-            int finalChordIndex = -1, finalShiftIndex = -1;
+            ArrayList<ChordData> chordDiffs;
 
             //Save variables to local attributes to make them accessible in run()
-            //Runnable return type for method linking
-            Runnable setArgs(int chord, int note) {
-                finalChordIndex = chord;
-                finalShiftIndex = note;
+            //Runnable return type for method chaining
+            Runnable setArgs(ArrayList<ChordData> cData) {
+                chordDiffs = cData;
                 return this;
             }
 
             @Override
             public void run() {
-                TextView textView = mainActivity.findViewById(R.id.mainText);
-
-                textView.setText(String.format(
-                        "%s%s",
-                        Chords.getNoteName(finalShiftIndex),
-                        Chords.getType(Chords.values()[finalChordIndex], true)));
+                mainActivity.updateUI(chordDiffs);
             }
-        }.setArgs(chordIndex, deltaIndex));
+        }.setArgs(chordDiffs));
+    }
 
-        //++runCount;
+    //Helper class for preserving the name of the chords after sorting
+    class ChordData {
+        int note;
+        Chords chordType;
+        Double delta;
+
+        ChordData (int note, Chords chordType) {
+            this.note = note;
+            this.chordType = chordType;
+            this.delta = 0d;
+        }
     }
 }
