@@ -1,7 +1,8 @@
 <resources>
-    <string name="app_name">SoundTest</string>
+    <string name="app_name">Chord Recognizer</string>
     <string name="action_settings">Settings</string>
-    <string name="start_listening">Start listening</string>
-    <string name="waiting">Waiting...</string>
-    <string name="stop_listening">Stop listening</string>
+    <string name="start_listening">Start</string>
+    <string name="waiting">Press start</string>
+    <string name="stop_listening">Stop</string>
+    <string name="text_permission_denied">I can\'t recognize chords if I can\'t hear them!</string>
 </resources>

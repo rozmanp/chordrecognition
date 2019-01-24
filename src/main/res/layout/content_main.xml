@@ -6,7 +6,7 @@
     android:layout_height="match_parent"
     android:background="@android:color/background_light"
     app:layout_behavior="@string/appbar_scrolling_view_behavior"
-    tools:context=".ListeningActivity"
+    tools:context=".MainActivity"
     tools:showIn="@layout/activity_main">
 
     <Button
@@ -29,21 +29,51 @@
     <TextView
         android:id="@+id/mainText"
         android:layout_width="wrap_content"
-        android:layout_height="41dp"
+        android:layout_height="67dp"
         android:layout_marginStart="165dp"
         android:layout_marginLeft="165dp"
         android:layout_marginTop="160dp"
         android:layout_marginEnd="162dp"
         android:layout_marginRight="162dp"
-        android:layout_marginBottom="165dp"
+        android:layout_marginBottom="163dp"
         android:text="@string/waiting"
         android:textColor="@android:color/holo_blue_light"
-        android:textSize="30sp"
-        android:textStyle="normal|bold"
+        android:fontFamily="sans-serif-light"
+        android:textSize="48sp"
+        android:textStyle="normal"
         android:typeface="normal"
         app:layout_constraintBottom_toTopOf="@+id/btnStartListen"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.52"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
+
+    <TextView
+        android:id="@+id/mainText2"
+        android:layout_width="wrap_content"
+        android:layout_height="41dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="163dp"
+        android:textColor="@android:color/holo_blue_light"
+        android:textSize="24sp"
+        android:textStyle="normal"
+        android:typeface="normal"
+        app:layout_constraintBottom_toTopOf="@+id/btnStartListen"
+        app:layout_constraintEnd_toEndOf="@+id/mainText"
+        app:layout_constraintStart_toStartOf="@+id/mainText"
+        app:layout_constraintTop_toBottomOf="@+id/mainText"
+        app:layout_constraintVertical_bias="0.0" />
+
+    <TextView
+        android:id="@+id/mainText3"
+        android:layout_width="wrap_content"
+        android:layout_height="41dp"
+        android:layout_marginTop="8dp"
+        android:textColor="@android:color/holo_blue_light"
+        android:textSize="18sp"
+        android:textStyle="normal"
+        android:typeface="normal"
+        app:layout_constraintEnd_toEndOf="@+id/mainText2"
+        app:layout_constraintStart_toStartOf="@+id/mainText2"
+        app:layout_constraintTop_toBottomOf="@+id/mainText2" />
 </android.support.constraint.ConstraintLayout>

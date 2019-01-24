@@ -7,35 +7,36 @@ import java.util.Collections;
 import java.util.List;
 
 public enum Chords {
-    MAJOR (new Float[] {1f, 0f, 0f, 0f, 1f, 0f, 0f, 1f, 0f, 0f, 0f, 0f}),
-    MINOR (new Float[] {1f, 0f, 0f, 1f, 0f, 0f, 0f, 1f, 0f, 0f, 0f, 0f});
-    /*
-    DIM   (new Float[] {1f, 0f, 0f, 1f, 0f, 0f, 1f, 0f, 0f, 0f, 0f, 0f}),
-    AUG   (new Float[] {1f, 0f, 0f, 0f, 1f, 0f, 0f, 0f, 1f, 0f, 0f, 0f}),
-    SUS2  (new Float[] {1f, 0f, 1f, 0f, 0f, 0f, 0f, 1f, 0f, 0f, 0f, 0f}),
-    SUS4  (new Float[] {1f, 0f, 0f, 0f, 0f, 1f, 0f, 1f, 0f, 0f, 0f, 0f});
-    */
-    private final List<Float> bitmask;
+    MAJOR (new Double[] {1d, 0d, 0d, 0d, 1d, 0d, 0d, 1d, 0d, 0d, 0d, 0d}, "", "major"),
+    MINOR (new Double[] {1d, 0d, 0d, 1d, 0d, 0d, 0d, 1d, 0d, 0d, 0d, 0d}, "m", "minor");
 
-    Chords(Float[] ch) {
+
+    private final List<Double> bitmask;
+    private final String notation;
+    private final String name;
+
+    Chords(Double[] ch, String notation, String name) {
         if(ch.length != 12){
             throw new InvalidParameterException("Argument does not represent a chroma vector");
         }
         this.bitmask = Arrays.asList(ch);
+        this.notation = notation;
+        this.name = name;
     }
 
-    private List<Float> getMaskAsList() { return bitmask; }
+    private List<Double> getMaskAsList() { return bitmask; }
 
-    public static Float[] shift(Chords chordType, int distance) {
-        List<Float> bitmask = new ArrayList<>(chordType.getMaskAsList());
+    public static Double[] shift(Chords chordType, int distance) {
+        List<Double> bitmask = new ArrayList<>(chordType.getMaskAsList());
+
 
         Collections.rotate(bitmask, distance);
-        return bitmask.toArray(new Float[12]);
+        return bitmask.toArray(new Double[12]);
     }
 
     //Return inverse of a bitmask
-    public static Float[] getInverse(Chords chordType, int shiftBy) {
-        Float[] shift = shift(chordType, shiftBy);
+    public static Double[] getInverse(Chords chordType, int shiftBy) {
+        Double[] shift = shift(chordType, shiftBy);
         for (int i = 0; i < shift.length; ++i) {
             shift[i] = 1 - shift[i];
         }
@@ -43,26 +44,7 @@ public enum Chords {
         return shift;
     }
 
-    public static String getType(Chords chord, boolean abbreviate) {
-        switch (chord) {
-            case MAJOR:
-                return (abbreviate) ? "" : "major";
-            case MINOR:
-                return (abbreviate) ? "m" : "minor";
-            /*
-            case DIM:
-                return (abbreviate) ? "dim" : "diminished";
-            case AUG:
-                return (abbreviate) ? "aug" : "augmented";
-            case SUS2:
-                return (abbreviate) ? "sus2" : "suspended 2nd";
-            case SUS4:
-                return (abbreviate) ? "sus4" : "suspended 4th";
-             */
-            default:
-                throw new IllegalArgumentException("Invalid chord type");
-        }
-    }
+    public String getNotation() { return this.notation; }
 
     public static String getNoteName(int distanceFromC) {
         switch (distanceFromC) {
